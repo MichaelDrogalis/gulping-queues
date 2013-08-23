@@ -1,4 +1,4 @@
-(ns gulping-queue.core-test
+(ns gulping-queues.core-test
   (:require [clojure.test :refer :all]
             [gulping-queue.core :refer :all]))
 
