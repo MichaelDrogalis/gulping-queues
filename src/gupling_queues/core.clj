@@ -6,8 +6,8 @@
 
 (defprotocol SpatialEmpty
   (totally-empty? [this])
-  (front-empty? [this k])
-  (back-empty? [this k]))
+  (front-empty? [this tol])
+  (back-empty? [this tol]))
 
 (defprotocol Peekable
   (front-peek [this])
@@ -18,10 +18,11 @@
   (offer!! [this x len]))
 
 (defprotocol Gulpable
-  (gulp! [this x velocity])
+  (gulp! [this x velocity buf pause])
   (gulp!! [this x velocity buf pause]))
 
 (defprotocol Consumable
+  (take! [this])
   (take!! [this]))
 
 (extend-protocol Touch
@@ -53,16 +54,14 @@
     (await p)
     result))
 
-(def buffer-space 3)
-
-(defn drive-distance [p step]
+(defn move-distance [p velocity]
   (let [space-left (:front p)]
-    (if (> space-left step)
-      step
+    (if (> space-left velocity)
+      velocity
       space-left)))
 
-(defn step [p]
-  (assoc p :front (- (:front p) (drive-distance p))))
+(defn step [p velocity]
+  (assoc p :front (- (:front p) (move-distance p velocity))))
 
 (defn watch-x-for-motion [me x ch]
   (add-watch x me
@@ -72,12 +71,27 @@
 
 (defn advance [p velocity pause]
   (prn p)
-  (send p velocity)
+  (send p step velocity)
   (<!! (timeout pause))
   (await p))
 
 (defn find-pointer [q x]
   (first (filter (fn [p] (= (:x @p) x)) @q)))
+
+(defn ref-gulp! [q x velocity buf pause]
+  (go (let [p (find-pointer q x)]
+        (while (> (:front @p) 0)
+          (let [preceeding-pos (dec (.indexOf @q p))]
+            (if-not (neg? preceeding-pos)
+              (let [preceeding-p (nth @q preceeding-pos)]
+                (if (<= (- (:front @p) (back-of-p @preceeding-p)) buf)
+                  (let [ch (chan)]
+                    (watch-x-for-motion preceeding-p p ch)
+                    (touch preceeding-p)
+                    (<!! ch)
+                    (remove-watch preceeding-p p velocity pause))
+                  (advance p velocity pause)))
+              (advance p velocity pause)))))))
 
 (defn ref-gulp!! [q x velocity buf pause]
   (let [p (find-pointer q x)]
@@ -91,7 +105,7 @@
                 (touch preceeding-p)
                 (<!! ch)
                 (remove-watch preceeding-p p velocity pause))
-              (advance p)))
+              (advance p velocity pause)))
           (advance p velocity pause))))))
 
 (defn ref-take! [q]
@@ -122,7 +136,8 @@
   (offer!! [this x len])
 
   Gulpable
-  (gulp! [this x velocity])
+  (gulp! [this x velocity buf pause]
+    (ref-gulp! line x velocity buf pause))
   (gulp!! [this x velocity buf pause]
     (ref-gulp!! line x velocity buf pause))
 
@@ -153,10 +168,4 @@
 
 (defn coord-g-queue [capacity]
   (CoordinatedGulpingQueue. (ref []) capacity))
-
-(def q (coord-g-queue 100))
-
-(offer! q "Mike" 20)
-(gulp!! q "Mike" 10 5 500)
-
 
