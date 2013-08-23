@@ -1,6 +1,9 @@
 # gulping-queue
 
-A Clojure library designed to ... well, that part is up to you.
+A Clojure library to expose Gulping Queues.
+Gulping Queues are spatial, concurrent queue data structures.
+
+Experimental and alpha. Stay out.
 
 ## Usage
 
