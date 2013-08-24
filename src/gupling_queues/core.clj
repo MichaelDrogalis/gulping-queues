@@ -100,7 +100,7 @@
                 (touch preceeding-p)
                 (<!! ch)
                 (remove-watch preceeding-p p velocity pause))
-              (advance p (min velocity buf) pause)))
+              (advance p (min velocity (back-of-p @preceeding-p)) pause)))
           (advance p velocity pause))))))
 
 (defn ref-gulp! [q x velocity buf pause]
