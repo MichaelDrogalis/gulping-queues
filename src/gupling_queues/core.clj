@@ -42,6 +42,12 @@
   (alter q conj (put-at-back! p distance))
   nil)
 
+(defn watch-p-for-motion [me x ch]
+  (add-watch x me
+             (fn [_ _ old new]
+               (when-not (= old new)
+                 (go (>! ch true))))))
+
 (defn ref-offer! [q distance x len]
   (let [p (agent {:x x :length len})
         result (dosync
@@ -54,11 +60,15 @@
     (await p)
     result))
 
-(defn watch-x-for-motion [me x ch]
-  (add-watch x me
-             (fn [_ _ old new]
-               (when-not (= old new)
-                 (go (>! ch true))))))
+(defn ref-offer!! [q distance x len]
+  (let [blocker (ref-offer! q distance x len)]
+    (if blocker
+      (let [ch (chan)]
+        (watch-p-for-motion x blocker ch)
+        (touch blocker)
+        (<!! ch)
+        (remove-watch blocker x)
+        (recur q distance x len)))))
 
 (defn move-distance [p velocity]
   (let [space-left (:front p)]
@@ -82,14 +92,15 @@
     (while (> (:front @p) 0)
       (let [preceeding-pos (dec (.indexOf @q p))]
         (if-not (neg? preceeding-pos)
-          (let [preceeding-p (nth @q preceeding-pos)]
-            (if (<= (- (:front @p) (back-of-p @preceeding-p)) buf)
+          (let [preceeding-p (nth @q preceeding-pos)
+                space (- (:front @p) (back-of-p @preceeding-p))]
+            (if (<= space buf)
               (let [ch (chan)]
-                (watch-x-for-motion preceeding-p p ch)
+                (watch-p-for-motion preceeding-p p ch)
                 (touch preceeding-p)
                 (<!! ch)
                 (remove-watch preceeding-p p velocity pause))
-              (advance p velocity pause))) ;;; FIX: Fails when velocity > buf
+              (advance p (min velocity buf) pause)))
           (advance p velocity pause))))))
 
 (defn ref-gulp! [q x velocity buf pause]
@@ -119,7 +130,7 @@
 (deftype CoordinatedGulpingQueue [line capacity]
   Offerable
   (offer! [this x len] (ref-offer! line capacity x len))
-  (offer!! [this x len])
+  (offer!! [this x len] (ref-offer!! line capacity x len))
 
   Gulpable
   (gulp! [this x velocity buf pause]
@@ -141,7 +152,7 @@
   (back-empty? [this tol] (ref-back-empty? line tol))
 
   clojure.lang.Seqable
-  (seq [this] (deref line))
+  (seq [this] (seq (deref line)))
   
   clojure.lang.IRef
   (addWatch [this key cb] (add-watch line key cb))
