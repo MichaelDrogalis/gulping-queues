@@ -89,7 +89,7 @@
                 (touch preceeding-p)
                 (<!! ch)
                 (remove-watch preceeding-p p velocity pause))
-              (advance p velocity pause)))
+              (advance p velocity pause))) ;;; FIX: Fails when velocity > buf
           (advance p velocity pause))))))
 
 (defn ref-gulp! [q x velocity buf pause]
@@ -148,12 +148,11 @@
   (removeWatch [this key] (remove-watch line key))
   
   clojure.lang.IDeref
-  (deref [this] @line)
+  (deref [this] (map deref (deref line)))
 
   Touch
   (touch [this] (touch line)))
 
 (defn coord-g-queue [capacity]
   (CoordinatedGulpingQueue. (ref []) capacity))
-
 
