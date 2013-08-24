@@ -4,7 +4,7 @@
 (defprotocol Touch
   (touch [this]))
 
-(defprotocol SpatialEmpty
+(defprotocol SpatiallyEmpty
   (totally-empty? [this])
   (front-empty? [this tol])
   (back-empty? [this tol]))
@@ -54,6 +54,12 @@
     (await p)
     result))
 
+(defn watch-x-for-motion [me x ch]
+  (add-watch x me
+             (fn [_ _ old new]
+               (when-not (= old new)
+                 (go (>! ch true))))))
+
 (defn move-distance [p velocity]
   (let [space-left (:front p)]
     (if (> space-left velocity)
@@ -63,35 +69,13 @@
 (defn step [p velocity]
   (assoc p :front (- (:front p) (move-distance p velocity))))
 
-(defn watch-x-for-motion [me x ch]
-  (add-watch x me
-             (fn [_ _ old new]
-               (when-not (= old new)
-                 (go (>! ch true))))))
-
 (defn advance [p velocity pause]
-  (prn p)
   (send p step velocity)
   (<!! (timeout pause))
   (await p))
 
 (defn find-pointer [q x]
   (first (filter (fn [p] (= (:x @p) x)) @q)))
-
-(defn ref-gulp! [q x velocity buf pause]
-  (go (let [p (find-pointer q x)]
-        (while (> (:front @p) 0)
-          (let [preceeding-pos (dec (.indexOf @q p))]
-            (if-not (neg? preceeding-pos)
-              (let [preceeding-p (nth @q preceeding-pos)]
-                (if (<= (- (:front @p) (back-of-p @preceeding-p)) buf)
-                  (let [ch (chan)]
-                    (watch-x-for-motion preceeding-p p ch)
-                    (touch preceeding-p)
-                    (<!! ch)
-                    (remove-watch preceeding-p p velocity pause))
-                  (advance p velocity pause)))
-              (advance p velocity pause)))))))
 
 (defn ref-gulp!! [q x velocity buf pause]
   (let [p (find-pointer q x)]
@@ -108,18 +92,20 @@
               (advance p velocity pause)))
           (advance p velocity pause))))))
 
+(defn ref-gulp! [q x velocity buf pause]
+  (go (ref-gulp!! q x velocity buf pause)))
+
 (defn ref-take! [q]
   (dosync
-   (let [head (first @q)]
-     (alter q rest)
-     (send head dissoc :front)
-     head)))
+   (if-let [head (first @q)]
+     (do (alter q rest)
+         (:x (deref head))))))
 
 (defn ref-front-peek [q]
-  (first @q))
+  (:x (deref (first @q))))
 
 (defn ref-back-peek [q]
-  (last @q))
+  (:x (deref (last @q))))
 
 (defn ref-totally-empty? [q]
   (empty? @q))
@@ -142,13 +128,14 @@
     (ref-gulp!! line x velocity buf pause))
 
   Consumable
+  (take! [this] (ref-take! line))
   (take!! [this])
   
   Peekable
   (front-peek [this] (ref-front-peek line))
   (back-peek [this] (ref-back-peek line))
   
-  SpatialEmpty
+  SpatiallyEmpty
   (totally-empty? [this] (ref-totally-empty? line))
   (front-empty? [this tol] (ref-front-empty? line tol))
   (back-empty? [this tol] (ref-back-empty? line tol))
@@ -168,4 +155,5 @@
 
 (defn coord-g-queue [capacity]
   (CoordinatedGulpingQueue. (ref []) capacity))
+
 
