@@ -42,10 +42,10 @@
   (alter q conj (put-at-back! p distance))
   nil)
 
-(defn watch-p-for-motion [p me ch]
+(defn watch-p-for-motion [p me ch pred]
   (add-watch p me
              (fn [_ _ old new]
-               (when-not (= old new)
+               (when (or (not= old new) (pred new))
                  (go (>! ch true))))))
 
 (defn ref-offer! [q distance x len]
@@ -64,7 +64,7 @@
   (let [blocker (ref-offer! q distance x len)]
     (if blocker
       (let [ch (chan)]
-        (watch-p-for-motion blocker x ch)
+        (watch-p-for-motion blocker x ch (fn [p] (>= (- distance (back-of-p p)) len)))
         (touch blocker)
         (<!! ch)
         (remove-watch blocker x)
@@ -96,10 +96,10 @@
                 space (- (:front @p) (back-of-p @preceeding-p))]
             (if (<= space buf)
               (let [ch (chan)]
-                (watch-p-for-motion preceeding-p p ch)
+                (watch-p-for-motion preceeding-p p ch (fn [el] (> (- (:front @p) (back-of-p el)) buf)))
                 (touch preceeding-p)
                 (<!! ch)
-                (remove-watch preceeding-p p velocity pause))
+                (remove-watch preceeding-p p))
               (advance p (min velocity (back-of-p @preceeding-p)) pause)))
           (advance p velocity pause))))))
 
@@ -167,13 +167,20 @@
 (defn coord-g-queue [capacity]
   (CoordinatedGulpingQueue. (ref []) capacity))
 
-(def q (coord-g-queue 30))
-
-(doseq [n (range 0 15)]
-  (offer!! q n 1)
-  (gulp! q n 1 0 0))
-
 (use 'clojure.pprint)
 
+(def q (coord-g-queue 30))
+
+(offer!! q "Mike" 1)
+(gulp! q "Mike" 1 0 0)
+
+(future (offer!! q "Dorrene" 1) (gulp! q "Dorrene" 1 0 0))
+(future (offer!! q "Kristen" 1) (gulp! q "Kristen" 1 0 0))
+(future (offer!! q "Dan" 1)     (gulp! q "Dan" 1 0 0))
+(future (offer!! q "Benti" 1)   (gulp! q "Benti" 1 0 0))
+
+
 (pprint q)
+
+
 
