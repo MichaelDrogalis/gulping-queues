@@ -42,8 +42,8 @@
   (alter q conj (put-at-back! p distance))
   nil)
 
-(defn watch-p-for-motion [me x ch]
-  (add-watch x me
+(defn watch-p-for-motion [p me ch]
+  (add-watch p me
              (fn [_ _ old new]
                (when-not (= old new)
                  (go (>! ch true))))))
@@ -64,7 +64,7 @@
   (let [blocker (ref-offer! q distance x len)]
     (if blocker
       (let [ch (chan)]
-        (watch-p-for-motion x blocker ch)
+        (watch-p-for-motion blocker x ch)
         (touch blocker)
         (<!! ch)
         (remove-watch blocker x)
@@ -159,11 +159,21 @@
   (removeWatch [this key] (remove-watch line key))
   
   clojure.lang.IDeref
-  (deref [this] (map deref (deref line)))
+  (deref [this] (deref line))
 
   Touch
   (touch [this] (touch line)))
 
 (defn coord-g-queue [capacity]
   (CoordinatedGulpingQueue. (ref []) capacity))
+
+(def q (coord-g-queue 30))
+
+(doseq [n (range 0 15)]
+  (offer!! q n 1)
+  (gulp! q n 1 0 0))
+
+(use 'clojure.pprint)
+
+(pprint q)
 
