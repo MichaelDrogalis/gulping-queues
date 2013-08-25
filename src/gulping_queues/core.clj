@@ -92,7 +92,8 @@
                  space (- (:front @p) (back-of-p preceeding-p-snapshot))]
              (cond (<= space buf)
                    (let [ch (chan)]
-                     (watch-p-for-motion preceeding-p p ch (fn [el] (>= (- (:front @p) (back-of-p el)) buf)))
+                     (watch-p-for-motion preceeding-p p ch
+                                         (fn [el] (>= (- (:front @p) (back-of-p el)) buf)))
                      (touch preceeding-p)
                      (<! ch)
                      (remove-watch preceeding-p p))
@@ -106,6 +107,9 @@
            (do (send p step velocity)
                (<! (timeout pause))
                (await p))))))))
+
+(defn ref-gulp!! [q x velocity buf pause]
+  (<!! (ref-gulp! q x velocity buf pause)))
 
 (defn ref-take! [q]
   (dosync (if-let [head (first @q)]
@@ -136,7 +140,8 @@
   Gulpable
   (gulp! [this x velocity buf pause]
     (ref-gulp! line x velocity buf pause))
-  (gulp!! [this x velocity buf pause])
+  (gulp!! [this x velocity buf pause]
+    (ref-gulp!! line x velocity buf pause))
 
   Consumable
   (take! [this] (ref-take! line))
