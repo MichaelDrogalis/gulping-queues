@@ -66,14 +66,14 @@
         (recur q distance x len))
       nil)))
 
-(defn move-distance [front velocity buf]
-  (min front (+ buf velocity)))
+(defn move-distance [front step-len]
+  (min front step-len))
 
-(defn step [p velocity buf]
-  (assoc p :front (- (:front p) (move-distance (:front p) velocity buf))))
+(defn step [p velocity]
+  (assoc p :front (- (:front p) (move-distance (:front p) velocity))))
 
-(defn advance [p velocity pause buf]
-  (send p step velocity buf)
+(defn advance [p velocity pause]
+  (send p step velocity)
   (<!! (timeout pause))
   (await p))
 
@@ -89,14 +89,16 @@
           (let [preceeding-p (nth q-snapshot preceeding-pos)
                 preceeding-p-snapshot @preceeding-p
                 space (- (:front @p) (back-of-p preceeding-p-snapshot))]
-            (if (< space (+ velocity buf))
-              (let [ch (chan)]
-                (watch-p-for-motion preceeding-p p ch (fn [el] (>= (- (:front @p) (back-of-p el)) buf)))
-                (touch preceeding-p)
-                (wait-f ch)
-                (remove-watch preceeding-p p))
-              (advance p velocity pause buf)))
-          (advance p velocity pause buf))))))
+            (cond (<= space buf)
+                  (let [ch (chan)]
+                    (watch-p-for-motion preceeding-p p ch (fn [el] (>= (- (:front @p) (back-of-p el)) buf)))
+                    (touch preceeding-p)
+                    (wait-f ch)
+                    (remove-watch preceeding-p p))
+                  (< space (+ buf velocity)) (advance p (- space buf) pause)
+                  :else (advance p velocity pause)))
+          (advance p velocity pause))))))
+
 
 (defn ref-gulp!! [q x velocity buf pause]
   (ref-gulp q x velocity buf pause <!!))
@@ -165,3 +167,22 @@
   (let [r (ref [])]
     (CoordinatedGulpingQueue. (ref []) capacity)))
 
+(def q (coord-g-queue 100))
+
+(offer! q "Mike" 10)
+
+@q
+
+(offer! q "Kristen" 10)
+
+(gulp!! q "Mike" 10 3 200)
+
+@q
+
+(offer! q "Kristen" 10)
+
+@q
+
+(gulp! q "Kristen" 10 2 200)
+
+@q
