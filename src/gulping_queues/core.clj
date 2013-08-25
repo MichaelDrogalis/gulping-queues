@@ -72,35 +72,40 @@
 (defn step [p velocity]
   (assoc p :front (- (:front p) (move-distance (:front p) velocity))))
 
-(defn advance [p velocity pause]
+(defn advance [p velocity pause ch-f]
   (send p step velocity)
-  (<!! (timeout pause))
+  (ch-f (timeout pause))
   (await p))
 
 (defn find-pointer [q x]
   (first (filter (fn [p] (= (:x @p) x)) @q)))
 
-(defn ref-gulp!! [q x velocity buf pause]
-  (let [p (find-pointer q x)
-        q-snapshot @q]
-    (while (> (:front @p) 0)
-      (let [preceeding-pos (dec (.indexOf q-snapshot p))]
-        (if-not (neg? preceeding-pos)
-          (let [preceeding-p (nth q-snapshot preceeding-pos)
-                preceeding-p-snapshot @preceeding-p
-                space (- (:front @p) (back-of-p preceeding-p-snapshot))]
-            (cond (<= space buf)
-                  (let [ch (chan)]
-                    (watch-p-for-motion preceeding-p p ch (fn [el] (>= (- (:front @p) (back-of-p el)) buf)))
-                    (touch preceeding-p)
-                    (<!! ch)
-                    (remove-watch preceeding-p p))
-                  (< space (+ buf velocity)) (advance p (- space buf) pause)
-                  :else (advance p velocity pause)))
-          (advance p velocity pause))))))
-
 (defn ref-gulp! [q x velocity buf pause]
-  (go (ref-gulp!! q x velocity buf pause)))
+  (go
+   (let [p (find-pointer q x)
+         q-snapshot @q]
+     (while (> (:front @p) 0)
+       (let [preceeding-pos (dec (.indexOf q-snapshot p))]
+         (if-not (neg? preceeding-pos)
+           (let [preceeding-p (nth q-snapshot preceeding-pos)
+                 preceeding-p-snapshot @preceeding-p
+                 space (- (:front @p) (back-of-p preceeding-p-snapshot))]
+             (cond (<= space buf)
+                   (let [ch (chan)]
+                     (watch-p-for-motion preceeding-p p ch (fn [el] (>= (- (:front @p) (back-of-p el)) buf)))
+                     (touch preceeding-p)
+                     (<! ch)
+                     (remove-watch preceeding-p p))
+                   (< space (+ buf velocity))
+                   (do (send p step (- space buf))
+                       (<! (timeout pause))
+                       (await p))
+                   :else (do (send p step velocity)
+                             (<! (timeout pause))
+                             (await p))))
+           (do (send p step velocity)
+               (<! (timeout pause))
+               (await p))))))))
 
 (defn ref-take! [q]
   (dosync (if-let [head (first @q)]
@@ -131,8 +136,7 @@
   Gulpable
   (gulp! [this x velocity buf pause]
     (ref-gulp! line x velocity buf pause))
-  (gulp!! [this x velocity buf pause]
-    (ref-gulp!! line x velocity buf pause))
+  (gulp!! [this x velocity buf pause])
 
   Consumable
   (take! [this] (ref-take! line))
