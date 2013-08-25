@@ -99,7 +99,6 @@
                   :else (advance p velocity pause)))
           (advance p velocity pause))))))
 
-
 (defn ref-gulp!! [q x velocity buf pause]
   (ref-gulp q x velocity buf pause <!!))
 
@@ -167,22 +166,3 @@
   (let [r (ref [])]
     (CoordinatedGulpingQueue. (ref []) capacity)))
 
-(def q (coord-g-queue 100))
-
-(offer! q "Mike" 10)
-
-@q
-
-(offer! q "Kristen" 10)
-
-(gulp!! q "Mike" 10 3 200)
-
-@q
-
-(offer! q "Kristen" 10)
-
-@q
-
-(gulp! q "Kristen" 10 2 200)
-
-@q
