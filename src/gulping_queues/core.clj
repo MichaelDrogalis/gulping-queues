@@ -59,7 +59,7 @@
   (let [blocker (ref-offer! q distance x len)]
     (if blocker
       (let [ch (chan)]
-        (watch-p-for-motion blocker x ch (fn [p] (>= (back-of-p p) len)))
+        (watch-p-for-motion blocker x ch (fn [p] (>= (- distance (back-of-p p)) len)))
         (touch blocker)
         (<!! ch)
         (remove-watch blocker x)
@@ -80,7 +80,7 @@
 (defn find-pointer [q x]
   (first (filter (fn [p] (= (:x @p) x)) @q)))
 
-(defn ref-gulp [q x velocity buf pause wait-f]
+(defn ref-gulp!! [q x velocity buf pause]
   (let [p (find-pointer q x)
         q-snapshot @q]
     (while (> (:front @p) 0)
@@ -93,21 +93,19 @@
                   (let [ch (chan)]
                     (watch-p-for-motion preceeding-p p ch (fn [el] (>= (- (:front @p) (back-of-p el)) buf)))
                     (touch preceeding-p)
-                    (wait-f ch)
+                    (<!! ch)
                     (remove-watch preceeding-p p))
                   (< space (+ buf velocity)) (advance p (- space buf) pause)
                   :else (advance p velocity pause)))
           (advance p velocity pause))))))
 
-(defn ref-gulp!! [q x velocity buf pause]
-  (ref-gulp q x velocity buf pause <!!))
-
 (defn ref-gulp! [q x velocity buf pause]
-  (go (ref-gulp q x velocity buf pause <!)))
+  (go (ref-gulp!! q x velocity buf pause)))
 
 (defn ref-take! [q]
   (dosync (if-let [head (first @q)]
             (do (alter q rest)
+                (send head assoc :front -1)
                 (:x (deref head))))))
 
 (defn ref-front-peek [q]
