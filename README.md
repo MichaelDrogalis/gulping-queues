@@ -27,6 +27,16 @@ Experimental, alpha, and not battled-scarred. Stay out.
 (gulp!! q "Mike" 10 3 200)
 
 @q ; => [#<Agent@25bbf0b7: {:x "Mike", :length 10, :front 0}>]
+
+;; Async gulp, returns immediately. 
+(gulp! q "Kristen" 10 3 200)
+
+@q ; => [#<Agent@25bbf0b7: {:x "Mike", :length 10, :front 0}>
+   ;     #<Agent@1c9a4938: {:x "Kristen", :length 10, :front 13}]
+
+(take! q) ; => "Mike"
+
+(take! q) ; => "Kristen"
 ```
 
 ## License
