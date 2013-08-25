@@ -49,7 +49,7 @@
   (let [p (agent {:x x :length len :front (- distance len)})]
     (dosync
      (if-let [tail (last @q)]
-       (let [room (- distance (+ (:front @tail) (:length @tail)))]
+       (let [room (- distance (back-of-p @tail))]
          (if (<= (:length @p) room)
            (occupy-space q p)
            tail))
@@ -80,30 +80,29 @@
 (defn find-pointer [q x]
   (first (filter (fn [p] (= (:x @p) x)) @q)))
 
-(defn ref-gulp!! [q x velocity buf pause]
-  (let [p (find-pointer q x)]
+(defn ref-gulp [q x velocity buf pause wait-f]
+  (let [p (find-pointer q x)
+        q-snapshot @q]
     (while (> (:front @p) 0)
-      (let [preceeding-pos (dec (.indexOf @q p))]
+      (let [preceeding-pos (dec (.indexOf q-snapshot p))]
         (if-not (neg? preceeding-pos)
-          (let [preceeding-p (nth @q preceeding-pos)
-                space (- (:front @p) (back-of-p @preceeding-p))]
-            (prn x space buf)
-            (if (<= space buf)
+          (let [preceeding-p (nth q-snapshot preceeding-pos)
+                preceeding-p-snapshot @preceeding-p
+                space (- (:front @p) (back-of-p preceeding-p-snapshot))]
+            (if (< space (+ velocity buf))
               (let [ch (chan)]
-                (watch-p-for-motion preceeding-p p ch (fn [el]
-                                                        (prn x "::"(> (- (:front @p) (back-of-p el)) buf))
-                                                        (> (- (:front @p) (back-of-p el)) buf)))
+                (watch-p-for-motion preceeding-p p ch (fn [el] (>= (- (:front @p) (back-of-p el)) buf)))
                 (touch preceeding-p)
-                (<!! ch)
+                (wait-f ch)
                 (remove-watch preceeding-p p))
-              (advance p (min velocity (- (:front @p) (back-of-p @preceeding-p))) pause buf)))
+              (advance p velocity pause buf)))
           (advance p velocity pause buf))))))
 
+(defn ref-gulp!! [q x velocity buf pause]
+  (ref-gulp q x velocity buf pause <!!))
+
 (defn ref-gulp! [q x velocity buf pause]
-  (go
-   (try
-     (ref-gulp!! q x velocity buf pause)
-     (catch Exception e (prn "------------------> " e)))))
+  (go (ref-gulp q x velocity buf pause <!)))
 
 (defn ref-take! [q]
   (dosync (if-let [head (first @q)]
@@ -163,17 +162,6 @@
   (touch [this] (touch line)))
 
 (defn coord-g-queue [capacity]
-  (CoordinatedGulpingQueue. (ref []) capacity))
-
-(use 'clojure.pprint)
-
-(def q (coord-g-queue 50))
-
-(future
-  (future (offer!! q "Mike" 1)    (gulp! q "Mike" 1 0 0))
-  (future (offer!! q "Dorrene" 1) (gulp! q "Dorrene" 1 0 0))
-  (future (offer!! q "Kristen" 1) (gulp! q "Kristen" 1 0 0))
-  (future (offer!! q "Benti" 1)   (gulp! q "Benti" 1 0 0)))
-
-(pprint q)
+  (let [r (ref [])]
+    (CoordinatedGulpingQueue. (ref []) capacity)))
 
