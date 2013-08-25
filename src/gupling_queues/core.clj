@@ -67,7 +67,7 @@
       nil)))
 
 (defn move-distance [front velocity buf]
-  (min (+ buf front) (+ buf velocity)))
+  (min front (+ buf velocity)))
 
 (defn step [p velocity buf]
   (assoc p :front (- (:front p) (move-distance (:front p) velocity buf))))
@@ -87,9 +87,12 @@
         (if-not (neg? preceeding-pos)
           (let [preceeding-p (nth @q preceeding-pos)
                 space (- (:front @p) (back-of-p @preceeding-p))]
+            (prn x space buf)
             (if (<= space buf)
               (let [ch (chan)]
-                (watch-p-for-motion preceeding-p p ch (fn [el] (> (- (:front @p) (back-of-p el)) buf)))
+                (watch-p-for-motion preceeding-p p ch (fn [el]
+                                                        (prn x "::"(> (- (:front @p) (back-of-p el)) buf))
+                                                        (> (- (:front @p) (back-of-p el)) buf)))
                 (touch preceeding-p)
                 (<!! ch)
                 (remove-watch preceeding-p p))
@@ -97,7 +100,10 @@
           (advance p velocity pause buf))))))
 
 (defn ref-gulp! [q x velocity buf pause]
-  (go (ref-gulp!! q x velocity buf pause)))
+  (go
+   (try
+     (ref-gulp!! q x velocity buf pause)
+     (catch Exception e (prn "------------------> " e)))))
 
 (defn ref-take! [q]
   (dosync (if-let [head (first @q)]
@@ -161,19 +167,12 @@
 
 (use 'clojure.pprint)
 
-(def q (coord-g-queue 30))
-
-@q
-
-(doseq [n (range 10)]
-  (offer!! q n 1)
-  (gulp! q n 1 0 0))
+(def q (coord-g-queue 50))
 
 (future
   (future (offer!! q "Mike" 1)    (gulp! q "Mike" 1 0 0))
   (future (offer!! q "Dorrene" 1) (gulp! q "Dorrene" 1 0 0))
   (future (offer!! q "Kristen" 1) (gulp! q "Kristen" 1 0 0))
-  (future (offer!! q "Dan" 1)     (gulp! q "Dan" 1 0 0))
   (future (offer!! q "Benti" 1)   (gulp! q "Benti" 1 0 0)))
 
 (pprint q)
