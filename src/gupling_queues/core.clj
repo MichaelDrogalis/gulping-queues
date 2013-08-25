@@ -35,11 +35,8 @@
 (defn back-of-p [p]
   (+ (:front p) (:length p)))
 
-(defn put-at-back! [p distance]
-  (send p (fn [p] (assoc p :front (- distance (:length p))))))
-
-(defn occupy-space [q p distance]
-  (alter q conj (put-at-back! p distance))
+(defn occupy-space [q p]
+  (alter q conj p)
   nil)
 
 (defn watch-p-for-motion [p me ch pred]
@@ -49,38 +46,34 @@
                  (go (>! ch true))))))
 
 (defn ref-offer! [q distance x len]
-  (let [p (agent {:x x :length len})
-        result (dosync
-         (if-let [tail (last @q)]
-           (let [room (- distance (+ (:front @tail) (:length @tail)))]
-             (if (<= (:length @p) room)
-               (occupy-space q p distance)
-               tail))
-           (occupy-space q p distance)))]
-    (await p)
-    result))
+  (let [p (agent {:x x :length len :front (- distance len)})]
+    (dosync
+     (if-let [tail (last @q)]
+       (let [room (- distance (+ (:front @tail) (:length @tail)))]
+         (if (<= (:length @p) room)
+           (occupy-space q p)
+           tail))
+       (occupy-space q p)))))
 
 (defn ref-offer!! [q distance x len]
   (let [blocker (ref-offer! q distance x len)]
     (if blocker
       (let [ch (chan)]
-        (watch-p-for-motion blocker x ch (fn [p] (>= (- distance (back-of-p p)) len)))
+        (watch-p-for-motion blocker x ch (fn [p] (>= (back-of-p p) len)))
         (touch blocker)
         (<!! ch)
         (remove-watch blocker x)
-        (recur q distance x len)))))
+        (recur q distance x len))
+      nil)))
 
-(defn move-distance [p velocity]
-  (let [space-left (:front p)]
-    (if (> space-left velocity)
-      velocity
-      space-left)))
+(defn move-distance [front velocity buf]
+  (min (+ buf front) (+ buf velocity)))
 
-(defn step [p velocity]
-  (assoc p :front (- (:front p) (move-distance p velocity))))
+(defn step [p velocity buf]
+  (assoc p :front (- (:front p) (move-distance (:front p) velocity buf))))
 
-(defn advance [p velocity pause]
-  (send p step velocity)
+(defn advance [p velocity pause buf]
+  (send p step velocity buf)
   (<!! (timeout pause))
   (await p))
 
@@ -100,17 +93,16 @@
                 (touch preceeding-p)
                 (<!! ch)
                 (remove-watch preceeding-p p))
-              (advance p (min velocity (back-of-p @preceeding-p)) pause)))
-          (advance p velocity pause))))))
+              (advance p (min velocity (- (:front @p) (back-of-p @preceeding-p))) pause buf)))
+          (advance p velocity pause buf))))))
 
 (defn ref-gulp! [q x velocity buf pause]
   (go (ref-gulp!! q x velocity buf pause)))
 
 (defn ref-take! [q]
-  (dosync
-   (if-let [head (first @q)]
-     (do (alter q rest)
-         (:x (deref head))))))
+  (dosync (if-let [head (first @q)]
+            (do (alter q rest)
+                (:x (deref head))))))
 
 (defn ref-front-peek [q]
   (:x (deref (first @q))))
@@ -171,16 +163,18 @@
 
 (def q (coord-g-queue 30))
 
-(offer!! q "Mike" 1)
-(gulp! q "Mike" 1 0 0)
+@q
 
-(future (offer!! q "Dorrene" 1) (gulp! q "Dorrene" 1 0 0))
-(future (offer!! q "Kristen" 1) (gulp! q "Kristen" 1 0 0))
-(future (offer!! q "Dan" 1)     (gulp! q "Dan" 1 0 0))
-(future (offer!! q "Benti" 1)   (gulp! q "Benti" 1 0 0))
+(doseq [n (range 10)]
+  (offer!! q n 1)
+  (gulp! q n 1 0 0))
 
+(future
+  (future (offer!! q "Mike" 1)    (gulp! q "Mike" 1 0 0))
+  (future (offer!! q "Dorrene" 1) (gulp! q "Dorrene" 1 0 0))
+  (future (offer!! q "Kristen" 1) (gulp! q "Kristen" 1 0 0))
+  (future (offer!! q "Dan" 1)     (gulp! q "Dan" 1 0 0))
+  (future (offer!! q "Benti" 1)   (gulp! q "Benti" 1 0 0)))
 
 (pprint q)
-
-
 
