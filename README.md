@@ -1,8 +1,8 @@
 # gulping-queues
 
-Gulping Queues are concurrent data structure with spatial and time semantics, providing
-autononous reactive ability for elements. Useful for simulating lines of people or cars.
-I made the name up.
+Gulping Queues are a concurrent data structure with spatial and time semantics,
+offering autononous reactive ability for elements. Useful for simulating lines of people.
+I made the name and concept up.
 
 Experimental, alpha, and not battled-scarred. Stay out.
 
