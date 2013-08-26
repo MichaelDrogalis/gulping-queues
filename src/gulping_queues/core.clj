@@ -1,27 +1,53 @@
 (ns gulping-queues.core
+ "Notation:  q - the queue
+             x - an element on the queue
+             p - a pointer, which is an agent
+
+  q contains pointers, containing maps of {:x x :front val :length len}
+  The inner queue consists of pointers.
+
+  function! => non-blocking/asynchronous
+  function!! => blocking"
   (:require [clojure.core.async :refer [chan go >! <! <!! timeout]]))
 
 (defprotocol Touch
+  "Applies the indentity function to a mutable type
+   with the purpose of triggering watches."
   (touch [this]))
 
 (defprotocol SpatiallyEmpty
+  "Describes the emptiness of a queue from a perspective.
+   tol is a tolerance in units. For example, front-empty with
+   20 units returns true if no element exists in the first
+   20 units of the queue."
   (totally-empty? [this])
   (front-empty? [this tol])
   (back-empty? [this tol]))
 
 (defprotocol Peekable
+  "Non-mutuating operations to view the head & tail."
   (front-peek [this])
   (back-peek [this]))
 
 (defprotocol Offerable
+  "Puts x on the queue if there is room at the tail.
+   offer! returns nil on success, and an agent on failure.
+   The agent can be watched, and successive attempts to offer
+   can be made.
+
+   offer!! blocks indefinitely until x is added to the tail."
   (offer! [this x len])
   (offer!! [this x len]))
 
 (defprotocol Gulpable
+  "Moves x from the tail with inertia towards the front of the
+   queue. gulp!! blocks until x is at the front of the queue.
+   gulp! returns immediately - its asynchronous variant."
   (gulp! [this x velocity buf pause])
   (gulp!! [this x velocity buf pause]))
 
 (defprotocol Consumable
+  "Take an element off the front of the queue."
   (take! [this])
   (take!! [this]))
 
@@ -32,20 +58,29 @@
   clojure.lang.Agent
   (touch [x] (send x identity)))
 
-(defn back-of-p [p]
+(defn back-of-p
+  "Determine the position of the backside of p."
+  [p]
   (+ (:front p) (:length p)))
 
-(defn occupy-space [q p]
+(defn occupy-space
+  "Put a pointer at the back of the queue."
+  [q p]
   (alter q conj p)
   nil)
 
-(defn watch-p-for-motion [p me ch pred]
+(defn watch-p-for-motion
+  "Add a watch to me, keyed by me.
+   When pred returns true, put a value on the ch."
+  [p me ch pred]
   (add-watch p me
              (fn [_ _ old new]
                (when (or (not= old new) (pred new))
                  (go (>! ch true))))))
 
-(defn ref-offer! [q distance x len]
+(defn ref-offer!
+  "Non-blocking offer."
+  [q distance x len]
   (let [p (agent {:x x :length len :front (- distance len)})]
     (dosync
      (if-let [tail (last @q)]
@@ -55,7 +90,9 @@
            tail))
        (occupy-space q p)))))
 
-(defn ref-offer!! [q distance x len]
+(defn ref-offer!!
+  "Blocking offer."
+  [q distance x len]
   (let [blocker (ref-offer! q distance x len)]
     (if blocker
       (let [ch (chan)]
@@ -72,15 +109,18 @@
 (defn step [p velocity]
   (assoc p :front (- (:front p) (move-distance (:front p) velocity))))
 
-(defn advance [p velocity pause ch-f]
-  (send p step velocity)
-  (ch-f (timeout pause))
-  (await p))
-
-(defn find-pointer [q x]
+(defn find-pointer
+  "Given x, find its corresponding pointer in the queue."
+  [q x]
   (first (filter (fn [p] (= (:x @p) x)) @q)))
 
-(defn ref-gulp! [q x velocity buf pause]
+(defn ref-gulp!
+  "Gulp the pointer for x down to the head of the queue.
+   Move at velocity units per pause ms. Require a buffering
+   space of buf between x and the pointer in front of it, unless
+   its at the front of the queue, in which case it moves all the
+   way to the front."
+  [q x velocity buf pause]
   (go
    (let [p (find-pointer q x)
          q-snapshot @q]
@@ -172,4 +212,33 @@
 (defn coord-g-queue [capacity]
   (let [r (ref [])]
     (CoordinatedGulpingQueue. (ref []) capacity)))
+
+;; A queue of 100 units.
+(def q (coord-g-queue 100))
+
+;; Put Mike on the queue. He takes up 10 units of space.
+(offer!! q "Mike" 10) ; => nil, success
+
+@q ; => [#<Agent@67467dbe: {:x "Mike", :length 10, :front 90}>]
+
+;; Fail, Mike is in the way.
+;; Get back the agent who blocks Timothy.
+;; Can watch for changes.
+(offer! q "Timothy" 5) ; => #<Agent@67467dbe: {:x "Mike", :length 10, :front 90}>
+
+;; Move Mike to the front of the queue, at 5 units per 250 ms.
+;; Requires 0 buffering room. Blocks until at the front.
+(gulp!! q "Mike" 5 0 250)
+
+@q ; => [#<Agent@67467dbe: {:x "Mike", :length 10, :front 0}>]
+
+(offer! q "Timothy" 5) ; => nil, success
+
+@q ; => [#<Agent@67467dbe: {:x "Mike", :length 10, :front 0}>
+   ;;    #<Agent@5f8551ae: {:x "Timothy", :length 5, :front 95}>]
+
+(take! q) ; => "Mike"
+
+@q ; => (#<Agent@5f8551ae: {:x "Timothy", :length 5, :front 95}>)
+   ;; Notably, there's a bug. Timothy didn't move to the front of the queue.
 
