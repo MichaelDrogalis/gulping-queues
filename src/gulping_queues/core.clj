@@ -2,28 +2,26 @@
   (:require [clojure.core.reducers :as r]
             [clojure.core.async :refer [chan go >! <! timeout take! put!]]))
 
-(def lane [{:id "Mike" :position 50 :buf 2}
-           {:id "Dorrene" :position 51 :buf 5}])
-
-(def ch (chan))
-
 (defn slot [lane id]
-  (let [indexed-lane (zipmap lane (range))]
-    (second (first (filter (fn [[k v]] (= id (:id k))) indexed-lane)))))
+  (let [indexed-lane (zipmap lane (range))
+        matches (filter (fn [[k v]] (= id (:id k))) indexed-lane)]
+    (second (first matches))))
 
-(defn drive-forward [car position]
-  (if (>= position 1)
-    (assoc car :position (dec position))
-    car))
+(defn drive-forward [car speed]
+  (assert (>= (:front car) 0))
+  (let [new-front (- (:front car) speed)]
+    (assoc car :front (max new-front 0))))
 
-(defn advance [old new {:keys [id position buf] :as car}]
+(defn drive-watching-forward [car target speed]
+  (let [space-between (- (:front car) (:front target) (:buf car))]
+    (assoc car :front (- (:front car) (min speed space-between)))))
+
+(defn advance [speed old new {:keys [id front buf] :as car}]
   (let [my-slot (slot old id)]
     (if (zero? my-slot)
-      (conj new (drive-forward car position))
+      (conj new (drive-forward car speed))
       (let [target (nth old (dec my-slot))]
-        (if (<= (- position (:position target)) buf)
-          (conj new car)
-          (conj new (drive-forward car position)))))))
+        (conj new (drive-watching-forward car target speed))))))
 
 (defn drain-channel
   ([ch] (drain-channel ch []))
