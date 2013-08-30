@@ -35,7 +35,7 @@
          (recur ch (conj result x))))))
 
 (defn drive [my-lane]
-  (let [result (future (r/reduce (partial advance my-lane) [] my-lane))]
+  (let [result (future (r/reduce (partial advance 1 my-lane) [] my-lane))]
     (prn @result)
     (Thread/sleep 200)
     (recur @result)))
