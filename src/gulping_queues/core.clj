@@ -1,11 +1,14 @@
 (ns gulping-queues.core
   (:require [clojure.core.reducers :as r]
-            [clojure.core.async :refer [chan go >! <! timeout take! put!]]))
+            [clojure.core.async :refer [chan go >! >!! <! <!! timeout take! put! alts!!]]))
 
 (defn slot [lane id]
   (let [indexed-lane (zipmap lane (range))
         matches (filter (fn [[k v]] (= id (:id k))) indexed-lane)]
     (second (first matches))))
+
+(defn back-of-car [car]
+  (+ (:front car) (:len car)))
 
 (defn drive-forward [car speed]
   (assert (>= (:front car) 0))
@@ -13,7 +16,7 @@
     (assoc car :front (max new-front 0))))
 
 (defn drive-watching-forward [car target speed]
-  (let [space-between (- (:front car) (:front target) (:buf car))]
+  (let [space-between (- (:front car) (back-of-car target) (:buf car))]
     (assoc car :front (- (:front car) (min speed space-between)))))
 
 (defn advance [speed old new {:keys [id front buf] :as car}]
