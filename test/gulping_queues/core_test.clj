@@ -54,3 +54,10 @@
                [] {:id "Benti" :front 7 :len 1 :buf 1})
       => [{:id "Benti" :front 7 :len 1 :buf 1}])
 
+(let [fns (light-transition->fns {:state-diff {:x [:green]} :ticks 1})]
+  (fact (reductions #(%2 %1) {:x [:red]} fns)
+        => [{:x [:red]} {:x [:green]}]))
+
+(let [fns (light-transition->fns {:state-diff {:x [:green]} :ticks 2})]
+  (fact (reductions #(%2 %1) {:x [:red]} fns)
+        => [{:x [:red]} {:x [:green]} {:x [:green]}]))

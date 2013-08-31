@@ -1,10 +1,24 @@
 (ns gulping-queues.core
-  (:require [clojure.core.reducers :as r]))
+  (:require [clojure.core.reducers :as r]
+            [clojure.pprint :refer [pprint]]))
 
-(def lanes {"north" {:state [] :entry (java.util.concurrent.LinkedBlockingQueue.)}
-            "east"  {:state [] :entry (java.util.concurrent.LinkedBlockingQueue.)}
-            "south" {:state [] :entry (java.util.concurrent.LinkedBlockingQueue.)}
-            "west"  {:state [] :entry (java.util.concurrent.LinkedBlockingQueue.)}})
+(def lanes {"north" [{:id "Mike" :front 50 :buf 3}]
+            "east"  []
+            "south" []
+            "west"  []})
+
+(defn light-transition->fns [{:keys [state-diff ticks]}]
+  (map (fn [_] (fn [light] (merge light state-diff))) (range ticks)))
+
+(def light-fns
+  (concat
+   (light-transition->fns {:state-diff {:x [:green] :z [:green]} :ticks 8})
+   (light-transition->fns {:state-diff {:x [:yellow] :z [:yellow]} :ticks 3})
+   (light-transition->fns {:state-diff {:x [:red] :z [:red]} :ticks 3})))
+
+(def light {:w [:red] :x [:red] :y [:red] :z [:red]})
+
+(def lights [{:state light :fns light-fns}])
 
 (defn slot [lane id]
   (let [indexed-lane (zipmap lane (range))
@@ -23,41 +37,23 @@
   (let [space-between (- (:front car) (back-of-car target) (:buf car))]
     (assoc car :front (- (:front car) (min speed space-between)))))
 
-(defn advance [speed old new {:keys [id front buf] :as car}]
+(defn advance [speed old new-lane {:keys [id front buf] :as car}]
   (let [my-slot (slot old id)]
     (if (zero? my-slot)
-      (conj new (drive-forward car speed))
-      (let [target (nth old (dec my-slot))]
-        (conj new (drive-watching-forward car target speed))))))
+      (conj new-lane (drive-forward car speed))
+      (let [target (nth car (dec my-slot))]
+        (conj new-lane (drive-watching-forward car target speed))))))
 
 (defn produce-next-lane-state [[lane-id lane]]
   {lane-id (r/reduce (partial advance 1 lane) [] lane)})
 
-(defn drive [lanes]
-  (prn lanes)
-  (let [result (apply merge (pmap produce-next-lane-state lanes))]
+(defn produce-next-light-state [{:keys [state fns]}]
+  (let [[f & more] fns]
+    {:state (f state) :fns (conj (vec more) f)}))
+
+(defn drive [old-lanes old-lights]
+  (let [new-lanes (apply merge (pmap produce-next-lane-state old-lanes))
+        new-lights (pmap produce-next-light-state old-lights)]
     (Thread/sleep 200)
-    (recur result)))
+    (recur new-lanes new-lights)))
 
-
-'{:schedule/ident :shamrock-schedule
-  :schedule/substitute {?w :standard ?x :standard ?y :standard ?z :standard}
-  :schedule/sequence [{:states {?x [:green] ?z [:green]} :ticks 8}
-                      {:states {?x [:yellow] ?z [:yellow]} :ticks 3}
-                      {:states {?x [:red] ?z [:red]} :ticks 3}
-                      {:states {?w [:green]  ?y [:green]} :ticks 8}
-                      {:states {?w [:yellow] ?y [:yellow]} :ticks 3}
-                      {:states {?w [:red] ?y [:red]} :ticks 3}]}
-
-(defn light-transformation->fns [{:keys [state-diff ticks]}]
-  (map (fn [_] (fn [light] (merge light state-diff))) (range ticks)))
-
-(def fns
-  (concat
-   (light-transformation->fns {:state-diff {:x [:green] :z [:green]} :ticks 8})
-   (light-transformation->fns {:state-diff {:x [:yellow] :z [:yellow]} :ticks 3})
-   (light-transformation->fns {:state-diff {:x [:red] :z [:red]} :ticks 3})))
-
-(def light {:w [:red] :x [:red] :y [:red] :z [:red]})
-
-(reductions #(%2 %1) light fns)
