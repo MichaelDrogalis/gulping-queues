@@ -52,6 +52,7 @@
     {:state (f state) :fns (conj (vec more) f)}))
 
 (defn drive [old-lanes old-lights]
+  (pprint (map :state old-lights))
   (let [new-lanes (apply merge (pmap produce-next-lane-state old-lanes))
         new-lights (pmap produce-next-light-state old-lights)]
     (Thread/sleep 200)
