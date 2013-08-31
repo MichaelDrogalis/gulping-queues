@@ -39,3 +39,28 @@
     (Thread/sleep 200)
     (recur result)))
 
+
+'{:schedule/ident :shamrock-schedule
+  :schedule/substitute {?w :standard ?x :standard ?y :standard ?z :standard}
+  :schedule/sequence [{:states {?x [:green] ?z [:green]} :ticks 8}
+                      {:states {?x [:yellow] ?z [:yellow]} :ticks 3}
+                      {:states {?x [:red] ?z [:red]} :ticks 3}
+                      {:states {?w [:green]  ?y [:green]} :ticks 8}
+                      {:states {?w [:yellow] ?y [:yellow]} :ticks 3}
+                      {:states {?w [:red] ?y [:red]} :ticks 3}]}
+
+
+
+(defn light-transformation->fns [{:keys [state-diff ticks]}]
+  (map (fn [_] (fn [light] (merge light state-diff))) (range ticks)))
+
+(def fns
+  (concat
+   (light-transformation->fns {:state-diff {:x [:green] :z [:green]} :ticks 8})
+   (light-transformation->fns {:state-diff {:x [:yellow] :z [:yellow]} :ticks 3})
+   (light-transformation->fns {:state-diff {:x [:red] :z [:red]} :ticks 3})))
+
+(def light {:w [:red] :x [:red] :y [:red] :z [:red]})
+
+(pprint
+ (reductions #(%2 %1) light fns))
