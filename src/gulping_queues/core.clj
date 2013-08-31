@@ -1,6 +1,10 @@
 (ns gulping-queues.core
-  (:require [clojure.core.reducers :as r]
-            [clojure.core.async :refer [chan go >! >!! <! <!! timeout take! put! alts!!]]))
+  (:require [clojure.core.reducers :as r]))
+
+(def lanes {"north" []
+            "east" []
+            "south" []
+            "west" []})
 
 (defn slot [lane id]
   (let [indexed-lane (zipmap lane (range))
@@ -26,17 +30,13 @@
       (let [target (nth old (dec my-slot))]
         (conj new (drive-watching-forward car target speed))))))
 
-(defn drain-channel
-  ([ch] (drain-channel ch []))
-  ([ch result]
-     (let [x (take! ch identity)]
-       (if (nil? x)
-         result
-         (recur ch (conj result x))))))
+(defn produce-next-lane-state [[lane-id lane]]
+  {lane-id (r/reduce (partial advance 1 lane) [] lane)})
 
-(defn drive [my-lane]
-  (let [result (future (r/reduce (partial advance 1 my-lane) [] my-lane))]
-    (prn @result)
+(defn drive [lanes]
+  (prn lanes)
+  (let [result (future (apply merge (pmap produce-next-lane-state lanes)))]
     (Thread/sleep 200)
     (recur @result)))
 
+(drive lanes)
