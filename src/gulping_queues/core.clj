@@ -1,10 +1,10 @@
 (ns gulping-queues.core
   (:require [clojure.core.reducers :as r]))
 
-(def lanes {"north" []
-            "east" []
-            "south" []
-            "west" []})
+(def lanes {"north" {:state [] :entry (java.util.concurrent.LinkedBlockingQueue.)}
+            "east"  {:state [] :entry (java.util.concurrent.LinkedBlockingQueue.)}
+            "south" {:state [] :entry (java.util.concurrent.LinkedBlockingQueue.)}
+            "west"  {:state [] :entry (java.util.concurrent.LinkedBlockingQueue.)}})
 
 (defn slot [lane id]
   (let [indexed-lane (zipmap lane (range))
@@ -35,8 +35,7 @@
 
 (defn drive [lanes]
   (prn lanes)
-  (let [result (future (apply merge (pmap produce-next-lane-state lanes)))]
+  (let [result (apply merge (pmap produce-next-lane-state lanes))]
     (Thread/sleep 200)
-    (recur @result)))
+    (recur result)))
 
-(drive lanes)
