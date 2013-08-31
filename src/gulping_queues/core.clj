@@ -41,7 +41,7 @@
   (let [my-slot (slot old id)]
     (if (zero? my-slot)
       (conj new-lane (drive-forward car speed))
-      (let [target (nth car (dec my-slot))]
+      (let [target (nth old (dec my-slot))]
         (conj new-lane (drive-watching-forward car target speed))))))
 
 (defn produce-next-lane-state [[lane-id lane]]

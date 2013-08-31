@@ -44,12 +44,12 @@
 (fact (advance 3 [{:id "Mike" :front 5 :buf 3}] [] {:id "Mike" :front 5 :buf 3})
       => [{:id "Mike" :front 2 :buf 3}])
 
-(fact (advance 5 [{:id "Mike" :front 5 :len 1 :buf 3}
+(fact (advance 5 [{:id "Mike"    :front 5 :len 1 :buf 3}
                   {:id "Dorrene" :front 10 :len 1 :buf 1}]
                [] {:id "Dorrene" :front 10 :len 1 :buf 1})
       => [{:id "Dorrene" :front 7 :len 1 :buf 1}])
 
-(fact (advance 1 [{:id "Mike" :front 5 :len 1 :buf 3}
+(fact (advance 1 [{:id "Mike"  :front 5 :len 1 :buf 3}
                   {:id "Benti" :front 7 :len 1 :buf 1}]
                [] {:id "Benti" :front 7 :len 1 :buf 1})
       => [{:id "Benti" :front 7 :len 1 :buf 1}])
@@ -57,6 +57,10 @@
 (let [fns (light-transition->fns {:state-diff {:x [:green]} :ticks 1})]
   (fact (reductions #(%2 %1) {:x [:red]} fns)
         => [{:x [:red]} {:x [:green]}]))
+
+(let [fns (light-transition->fns {:state-diff {:x [:green]} :ticks 2})]
+  (fact (reductions #(%2 %1) {:x [:red]} fns)
+        => [{:x [:red]} {:x [:green]} {:x [:green]}]))
 
 (let [fns (light-transition->fns {:state-diff {:x [:green]} :ticks 2})]
   (fact (reductions #(%2 %1) {:x [:red]} fns)
