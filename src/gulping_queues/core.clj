@@ -49,8 +49,6 @@
                       {:states {?w [:yellow] ?y [:yellow]} :ticks 3}
                       {:states {?w [:red] ?y [:red]} :ticks 3}]}
 
-
-
 (defn light-transformation->fns [{:keys [state-diff ticks]}]
   (map (fn [_] (fn [light] (merge light state-diff))) (range ticks)))
 
@@ -62,5 +60,4 @@
 
 (def light {:w [:red] :x [:red] :y [:red] :z [:red]})
 
-(pprint
- (reductions #(%2 %1) light fns))
+(reductions #(%2 %1) light fns)
