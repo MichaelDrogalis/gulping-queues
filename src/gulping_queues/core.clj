@@ -2,23 +2,8 @@
   (:require [clojure.core.reducers :as r]
             [clojure.pprint :refer [pprint]]))
 
-(def lanes {"north" [{:id "Mike" :front 50 :buf 3}]
-            "east"  []
-            "south" []
-            "west"  []})
-
 (defn light-transition->fns [{:keys [state-diff ticks]}]
   (map (fn [_] (fn [light] (merge light state-diff))) (range ticks)))
-
-(def light-fns
-  (concat
-   (light-transition->fns {:state-diff {:x [:green] :z [:green]} :ticks 8})
-   (light-transition->fns {:state-diff {:x [:yellow] :z [:yellow]} :ticks 3})
-   (light-transition->fns {:state-diff {:x [:red] :z [:red]} :ticks 3})))
-
-(def light {:w [:red] :x [:red] :y [:red] :z [:red]})
-
-(def lights [{:state light :fns light-fns}])
 
 (defn slot [lane id]
   (let [indexed-lane (zipmap lane (range))
